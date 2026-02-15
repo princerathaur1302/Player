@@ -174,28 +174,15 @@ export function VideoPlayer({ src, poster, autoPlay = false }: VideoPlayerProps)
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
         const x = e.clientX - rect.left;
-        const width = rect.width;
-
-        if (x < width * 0.33) {
-          // ⬅️ LEFT → rewind
-          videoRef.current.currentTime -= 10;
+        if (x < rect.width / 2) {
+          // Rewind
+          if (videoRef.current) videoRef.current.currentTime -= 10;
           setShowDoubleTapFeedback("rewind");
-        } 
-        else if (x > width * 0.66) {
-          // ➡️ RIGHT → forward
-          videoRef.current.currentTime += 10;
+        } else {
+          // Forward
+          if (videoRef.current) videoRef.current.currentTime += 10;
           setShowDoubleTapFeedback("forward");
-        } 
-        else {
-          // ⏯️ CENTER → play / pause
-          if (isPlaying) {
-            videoRef.current.pause();
-          } else {
-            videoRef.current.play();
-          }
-          setShowDoubleTapFeedback(null);
         }
-
         setTimeout(() => setShowDoubleTapFeedback(null), 600);
       }
     } else {
