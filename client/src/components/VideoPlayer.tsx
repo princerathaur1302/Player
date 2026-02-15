@@ -1,0 +1,336 @@
+import React, { useEffect, useRef, useState } from "react";
+import Hls from "hls.js";
+import { 
+  Play, Pause, Volume2, VolumeX, Maximize, Minimize, 
+  Settings, FastForward, Rewind, SkipForward, SkipBack 
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import * as Slider from "@radix-ui/react-slider";
+import { motion, AnimatePresence } from "framer-motion";
+
+interface VideoPlayerProps {
+  src: string;
+  poster?: string;
+  autoPlay?: boolean;
+}
+
+export function VideoPlayer({ src, poster, autoPlay = false }: VideoPlayerProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [showControls, setShowControls] = useState(true);
+  const [isBuffering, setIsBuffering] = useState(false);
+  const controlTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Double tap logic
+  const lastTapRef = useRef<number>(0);
+  const [showDoubleTapFeedback, setShowDoubleTapFeedback] = useState<"forward" | "rewind" | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    let hls: Hls | null = null;
+
+    if (Hls.isSupported()) {
+      hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+      });
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (autoPlay) video.play().catch(() => {});
+      });
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+           switch (data.type) {
+             case Hls.ErrorTypes.NETWORK_ERROR:
+               hls?.startLoad();
+               break;
+             case Hls.ErrorTypes.MEDIA_ERROR:
+               hls?.recoverMediaError();
+               break;
+             default:
+               hls?.destroy();
+               break;
+           }
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = src;
+      if (autoPlay) video.play().catch(() => {});
+    }
+
+    return () => {
+      if (hls) hls.destroy();
+    };
+  }, [src, autoPlay]);
+
+  // Event Listeners
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onTimeUpdate = () => setCurrentTime(video.currentTime);
+    const onLoadedMetadata = () => setDuration(video.duration);
+    const onWaiting = () => setIsBuffering(true);
+    const onPlaying = () => setIsBuffering(false);
+    const onVolumeChange = () => {
+      setVolume(video.volume);
+      setIsMuted(video.muted);
+    };
+
+    video.addEventListener("play", onPlay);
+    video.addEventListener("pause", onPause);
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("loadedmetadata", onLoadedMetadata);
+    video.addEventListener("waiting", onWaiting);
+    video.addEventListener("playing", onPlaying);
+    video.addEventListener("volumechange", onVolumeChange);
+
+    return () => {
+      video.removeEventListener("play", onPlay);
+      video.removeEventListener("pause", onPause);
+      video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("loadedmetadata", onLoadedMetadata);
+      video.removeEventListener("waiting", onWaiting);
+      video.removeEventListener("playing", onPlaying);
+      video.removeEventListener("volumechange", onVolumeChange);
+    };
+  }, []);
+
+  // Controls Visibility
+  const handleMouseMove = () => {
+    setShowControls(true);
+    if (controlTimeoutRef.current) clearTimeout(controlTimeoutRef.current);
+    controlTimeoutRef.current = setTimeout(() => {
+      if (isPlaying) setShowControls(false);
+    }, 2500);
+  };
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+    } else {
+      videoRef.current.play();
+    }
+  };
+
+  const toggleFullscreen = async () => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      await containerRef.current.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      await document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
+  const handleSeek = (value: number[]) => {
+    if (!videoRef.current) return;
+    videoRef.current.currentTime = value[0];
+    setCurrentTime(value[0]);
+  };
+
+  const handleVolumeChange = (value: number[]) => {
+    if (!videoRef.current) return;
+    videoRef.current.volume = value[0];
+    videoRef.current.muted = value[0] === 0;
+  };
+
+  const toggleMute = () => {
+    if (!videoRef.current) return;
+    videoRef.current.muted = !videoRef.current.muted;
+  };
+
+  const changePlaybackRate = () => {
+    if (!videoRef.current) return;
+    const rates = [0.5, 1, 1.5, 2, 3];
+    const currentIndex = rates.indexOf(playbackRate);
+    const nextRate = rates[(currentIndex + 1) % rates.length];
+    videoRef.current.playbackRate = nextRate;
+    setPlaybackRate(nextRate);
+  };
+
+  // Double Tap Handler
+  const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      // Double tap detected
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const x = e.clientX - rect.left;
+        if (x < rect.width / 2) {
+          // Rewind
+          if (videoRef.current) videoRef.current.currentTime -= 10;
+          setShowDoubleTapFeedback("rewind");
+        } else {
+          // Forward
+          if (videoRef.current) videoRef.current.currentTime += 10;
+          setShowDoubleTapFeedback("forward");
+        }
+        setTimeout(() => setShowDoubleTapFeedback(null), 600);
+      }
+    } else {
+      // Single tap - toggle play/pause? Or just show controls
+      // For now let's just show controls
+      if (showControls && isPlaying) {
+         togglePlay();
+      }
+    }
+    lastTapRef.current = now;
+  };
+
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div 
+      ref={containerRef}
+      className="group relative w-full bg-black rounded-xl overflow-hidden aspect-video shadow-2xl ring-1 ring-white/10"
+      onMouseMove={handleMouseMove}
+      onClick={handleContainerClick}
+    >
+      <video
+        ref={videoRef}
+        className="w-full h-full object-contain"
+        poster={poster}
+        playsInline
+      />
+
+      {/* Buffering Indicator */}
+      {isBuffering && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 bg-black/50 pointer-events-none">
+          <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+        </div>
+      )}
+
+      {/* Double Tap Feedback */}
+      <AnimatePresence>
+        {showDoubleTapFeedback && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.5 }}
+            className={cn(
+              "absolute top-1/2 -translate-y-1/2 flex flex-col items-center justify-center text-white/90 z-20 pointer-events-none bg-black/60 p-4 rounded-full backdrop-blur-sm",
+              showDoubleTapFeedback === "rewind" ? "left-1/4" : "right-1/4"
+            )}
+          >
+            {showDoubleTapFeedback === "rewind" ? (
+              <>
+                <Rewind className="w-8 h-8 mb-1" />
+                <span className="text-xs font-bold">-10s</span>
+              </>
+            ) : (
+              <>
+                <FastForward className="w-8 h-8 mb-1" />
+                <span className="text-xs font-bold">+10s</span>
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Big Play Button Overlay */}
+      {!isPlaying && !isBuffering && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity duration-300 hover:bg-black/20">
+          <button 
+            onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+            className="w-20 h-20 bg-primary/90 rounded-full flex items-center justify-center text-primary-foreground shadow-2xl hover:scale-105 transition-transform"
+          >
+            <Play className="w-8 h-8 fill-current ml-1" />
+          </button>
+        </div>
+      )}
+
+      {/* Controls Bar */}
+      <div 
+        className={cn(
+          "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 transition-opacity duration-300 z-30",
+          showControls || !isPlaying ? "opacity-100" : "opacity-0"
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Progress Bar */}
+        <div className="mb-4 group/slider">
+          <Slider.Root
+            className="relative flex items-center select-none touch-none w-full h-5 cursor-pointer"
+            value={[currentTime]}
+            max={duration || 100}
+            step={0.1}
+            onValueChange={handleSeek}
+          >
+            <Slider.Track className="bg-white/20 relative grow rounded-full h-1 group-hover/slider:h-1.5 transition-all">
+              <Slider.Range className="absolute bg-primary rounded-full h-full" />
+            </Slider.Track>
+            <Slider.Thumb className="block w-4 h-4 bg-primary shadow-lg rounded-full hover:scale-125 focus:outline-none transition-transform opacity-0 group-hover/slider:opacity-100" />
+          </Slider.Root>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button onClick={togglePlay} className="player-control-button text-white hover:text-primary">
+              {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
+            </button>
+
+            <div className="group/vol relative flex items-center gap-2">
+              <button onClick={toggleMute} className="player-control-button text-white hover:text-primary">
+                {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+              </button>
+              <div className="w-0 overflow-hidden group-hover/vol:w-24 transition-all duration-300">
+                <Slider.Root
+                  className="relative flex items-center select-none touch-none w-20 h-5"
+                  value={[isMuted ? 0 : volume]}
+                  max={1}
+                  step={0.01}
+                  onValueChange={handleVolumeChange}
+                >
+                  <Slider.Track className="bg-white/20 relative grow rounded-full h-1">
+                    <Slider.Range className="absolute bg-white rounded-full h-full" />
+                  </Slider.Track>
+                  <Slider.Thumb className="block w-3 h-3 bg-white shadow rounded-full hover:scale-110 focus:outline-none" />
+                </Slider.Root>
+              </div>
+            </div>
+
+            <div className="text-xs font-medium text-white/80 tabular-nums">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={changePlaybackRate}
+              className="px-2 py-1 rounded-md text-xs font-bold bg-white/10 hover:bg-white/20 text-white min-w-[3rem] transition-colors"
+            >
+              {playbackRate}x
+            </button>
+            
+            <button onClick={toggleFullscreen} className="player-control-button text-white hover:text-primary">
+              {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

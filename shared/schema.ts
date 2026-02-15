@@ -1,18 +1,26 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+// We might want to save history of played videos
+export const history = pgTable("history", {
+  id: serial("id").primaryKey(),
+  url: text("url").notNull(),
+  referrer: text("referrer"),
+  title: text("title"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+export const insertHistorySchema = createInsertSchema(history).omit({ id: true, createdAt: true });
+
+export type HistoryItem = typeof history.$inferSelect;
+export type InsertHistory = z.infer<typeof insertHistorySchema>;
+
+// Request types
+export const streamRequestSchema = z.object({
+  url: z.string().url(),
+  referrer: z.string().optional(),
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export type StreamRequest = z.infer<typeof streamRequestSchema>;
