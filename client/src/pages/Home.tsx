@@ -6,7 +6,7 @@ import { VideoPlayer } from "@/components/VideoPlayer";
 import { HistoryList } from "@/components/HistoryList";
 import { useCreateHistory, useClearHistory } from "@/hooks/use-history";
 import { streamRequestSchema } from "@shared/schema";
-import { Play, Download, Trash2, Link as LinkIcon, Globe } from "lucide-react";
+import { Play, Download, Trash2, Link as LinkIcon, Globe, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
