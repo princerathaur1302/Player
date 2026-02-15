@@ -30,13 +30,13 @@ export function HistoryList({ onSelect }: HistoryListProps) {
             onClick={() => onSelect(item.url, item.referrer || undefined)}
             className="group glass-panel p-4 rounded-xl flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors border border-border/50 hover:border-primary/50"
           >
-            <div className="min-w-0 flex-1 mr-4">
+            <div className="min-w-0 flex-1 mr-4 overflow-hidden">
               <h3 className="font-medium text-foreground truncate">{item.title || "Untitled Stream"}</h3>
-              <p className="text-sm text-muted-foreground truncate mt-1 font-mono">{item.url}</p>
+              <p className="text-sm text-muted-foreground break-all mt-1 font-mono">{item.url}</p>
               {item.referrer && (
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">Ref</span>
-                  <span className="text-xs text-muted-foreground truncate">{item.referrer}</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium flex-shrink-0">Ref</span>
+                  <span className="text-xs text-muted-foreground break-all">{item.referrer}</span>
                 </div>
               )}
             </div>

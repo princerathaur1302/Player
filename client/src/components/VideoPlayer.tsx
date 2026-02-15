@@ -170,6 +170,7 @@ export function VideoPlayer({ src, poster, autoPlay = false }: VideoPlayerProps)
     
     if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
       // Double tap detected
+      if (controlTimeoutRef.current) clearTimeout(controlTimeoutRef.current);
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
         const x = e.clientX - rect.left;
@@ -185,10 +186,13 @@ export function VideoPlayer({ src, poster, autoPlay = false }: VideoPlayerProps)
         setTimeout(() => setShowDoubleTapFeedback(null), 600);
       }
     } else {
-      // Single tap - toggle play/pause? Or just show controls
-      // For now let's just show controls
-      if (showControls && isPlaying) {
-         togglePlay();
+      // Single tap - just show controls if they are hidden
+      if (!showControls) {
+        setShowControls(true);
+        if (controlTimeoutRef.current) clearTimeout(controlTimeoutRef.current);
+        controlTimeoutRef.current = setTimeout(() => {
+          if (isPlaying) setShowControls(false);
+        }, 2500);
       }
     }
     lastTapRef.current = now;
